@@ -24,6 +24,10 @@ resource "aws_lambda_function" "test_lambda" {
     "Name" : lookup(var.lambda_config, "name")
   }, var.tags)
 
+  architectures = [
+    "arm64"
+  ]
+
   lifecycle {
     ignore_changes = [source_code_hash]
   }
