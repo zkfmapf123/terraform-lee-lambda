@@ -1,34 +1,64 @@
-resource "aws_lambda_function" "test_lambda" {
-  filename         = lookup(var.lambda_config, "filename")
-  function_name    = lookup(var.lambda_config, "name")
-  role             = data.aws_iam_role.iam_lambda.arn
-  handler          = lookup(var.lambda_config, "handler")
-  source_code_hash = var.lambda_source_code
+################################################# Data #################################################
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+data "aws_ecr_repository" "ecr" {
+  name = lookup(local.computing, "image_url")
+}
 
-  ## config
-  timeout     = tonumber(lookup(var.lambda_hardware, "timeout"))
-  memory_size = tonumber(lookup(var.lambda_hardware, "memory_size"))
-  runtime     = lookup(var.lambda_hardware, "runtime")
+################################################# ECR #################################################
+## ECR Repository 없을 때 생성
+resource "aws_ecr_repository" "ecr_repository" {
+  count = data.aws_ecr_repository.ecr.arn == "" ? 1 : 0
+  name  = lookup(local.computing, "image_url")
+}
 
-  ## environment
-  dynamic "environment" {
-    for_each = length(var.env_vars) == 0 ? [] : [1]
+resource "aws_ecr_lifecycle_policy" "ecr_repository_lifecycle" {
+  count = data.aws_ecr_repository.ecr.arn == "" ? 1 : 0
 
-    content {
-      variables = var.env_vars
-    }
+  repository = aws_ecr_repository.ecr_repository[0].name
+  policy     = <<EOF
+{
+    "rules": [
+        {
+            "rulePriority": 1,
+            "description": "Keep last 20 images",
+            "selection": {
+                "tagStatus": "tagged",
+                "countType": "imageCountMoreThan",
+                "countNumber": 20
+            },
+            "action": {
+                "type": "expire"
+            }
+        }
+    ]
+}
+EOF
+}
+
+################################################# Lambda #################################################
+resource "aws_lambda_function" "function" {
+  function_name = lookup(local.computing, "name")
+  image_uri     = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/${local.computing.image_url}:${random_string.random.id}"
+  package_type  = "Image"
+
+  timeout     = tonumber(lookup(local.computing, "timeout"))
+  memory_size = tonumber(lookup(local.computing, "memory"))
+  role        = aws_iam_role.lambda_role.arn
+
+  architectures = [lookup(local.computing, "architecture")]
+
+  ## environment 
+  environment {
+    variables = merge(lookup(local.computing, "environments")...)
   }
 
-  tags = merge({
-    "Property" : "Lambda",
-    "Name" : lookup(var.lambda_config, "name")
-  }, var.tags)
+  ## tags
+  tags = merge(lookup(local.computing, "tags")...)
 
-  architectures = [
-    "arm64"
-  ]
+  depends_on = [null_resource.build]
+}
 
-  lifecycle {
-    ignore_changes = [source_code_hash]
-  }
+output "build_number" {
+  value = "${local.computing.image_url}:${random_string.random.id}"
 }
