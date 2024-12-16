@@ -1,6 +1,7 @@
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
+- CLI를 활용하여 배포가 가능하도록 수정하였습니다.
 - <b>ECR을 미리 생성하고 var.ecr_attr에 ecr registry를 입력해야 함</b>
 
 ## Providers
