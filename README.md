@@ -1,25 +1,107 @@
-# Lambda Module
+<!-- BEGIN_TF_DOCS -->
+## Requirements
 
-## Description
+- <b>ECR을 미리 생성하고 var.ecr_attr에 ecr registry를 입력해야 함</b>
 
-- Lambda 함수를 Docker 기반으로 구성 / 배포 하는 테라폼 모듈
+## Providers
 
-## Interface
+| Name | Version |
+|------|---------|
+| <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
+| <a name="provider_null"></a> [null](#provider\_null) | n/a |
+| <a name="provider_random"></a> [random](#provider\_random) | n/a |
 
-```yaml
-## examples 참조
-lambda:
-  iam:
-    name:           ## iam 이름
-    policy:         ## iam 구성에 필요한 정책
-  computing:
-    name:           ## 람다 함수 이름
-    image_url:      ## ecr 이름 (없으면 자동생성)
-    timeout:
-    memory:
-    architecture:   ## x86_64 | arm64
-    environments:   ## 환경변수
-    tags:           ## 태그
+## Modules
+
+No modules.
+
+## Resources
+
+| Name | Type |
+|------|------|
+| [aws_iam_policy.lambda_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
+| [aws_iam_role.lambda_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
+| [aws_iam_role_policy_attachment.policy_attach](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
+| [aws_lambda_function.function](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
+| [null_resource.build](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
+| [random_string.random](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
+| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_iam_policy_document.lambda_default_policy_document](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_auto_deploy"></a> [auto\_deploy](#input\_auto\_deploy) | 배포 옵션입니다. | `map` | <pre>{<br>  "is_enable": false,<br>  "revision": "1.0.0"<br>}</pre> | no |
+| <a name="input_common_attr"></a> [common\_attr](#input\_common\_attr) | 공통 옵션입니다. | `map` | <pre>{<br>  "name": ""<br>}</pre> | no |
+| <a name="input_compute_attr"></a> [compute\_attr](#input\_compute\_attr) | lambda computing 옵션입니다. | `map` | <pre>{<br>  "architecture": "arm64",<br>  "environments": {<br>    "System": "lambda"<br>  },<br>  "logging_format": "JSON",<br>  "memory": 128,<br>  "timeout": 10<br>}</pre> | no |
+| <a name="input_ecr_attr"></a> [ecr\_attr](#input\_ecr\_attr) | ecr 옵션입니다. | `map` | <pre>{<br>  "exists_ecr_registry": ""<br>}</pre> | no |
+| <a name="input_iam_attr"></a> [iam\_attr](#input\_iam\_attr) | iam 옵션입니다. | `map` | <pre>{<br>  "policy": {}<br>}</pre> | no |
+| <a name="input_network_attr"></a> [network\_attr](#input\_network\_attr) | lambda computing에 network 옵션입니다. | `map` | <pre>{<br>  "sg_ids": [],<br>  "subnet_ids": [],<br>  "vpc_id": null<br>}</pre> | no |
+
+## Outputs
+
+No outputs.
+<!-- END_TF_DOCS -->
+
+## Docker Image Examples
+
+### Javascript
+
+```Dockerfile
+FROM public.ecr.aws/lambda/nodejs:20
+COPY index.js ${LAMBDA_TASK_ROOT}
+CMD [ "index.handler" ]
+```
+
+```javascript
+exports.handler = async (event) => {
+  const response = {
+    statusCode: 200,
+    body: JSON.stringify("Hello from Lambda!"),
+  };
+  return response;
+};
+```
+
+### Golang
+
+```Dockerfile
+FROM golang:1.23 as build
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+COPY main.go .
+RUN go build -tags lambda.norpc -o main main.go
+
+FROM public.ecr.aws/lambda/provided:al2023
+COPY --from=build /app/main ./main
+ENTRYPOINT [ "./main" ]
+```
+
+```golang
+package main
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+
+        "github.com/aws/aws-lambda-go/lambda"
+)
+
+
+func HandleRequest(ctx context.Context, e json.RawMessage) (string, error) {
+
+        fmt.Println("Event : ", string(e))
+        return "hello world-1", nil
+}
+
+func main() {
+        lambda.Start(HandleRequest)
+}
 ```
 
 ## Issue
